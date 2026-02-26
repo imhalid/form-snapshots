@@ -1,0 +1,140 @@
+:root {
+  /* light – neutral-like palette */
+  --fs-st-border: #e5e5e5;           /* neutral-200 */
+  --fs-st-border-soft: #d4d4d4;      /* neutral-300 */
+  --fs-st-header-bg: #f5f5f5;        /* neutral-100 */
+  --fs-st-key-text: #737373;         /* neutral-500 */
+  --fs-st-muted-text: #737373;       /* neutral-500 */
+  --fs-st-muted-strong: #a3a3a3;     /* neutral-400 */
+  --fs-st-chip-bg: #e5e5e5;          /* neutral-200 */
+  --fs-st-chip-text: #171717;        /* neutral-900 */
+  --fs-st-object-bg: #f5f5f5;        /* neutral-100 */
+  --fs-st-badge-true-bg: rgba(22, 163, 74, 0.1);
+  --fs-st-badge-true-text: #166534;
+  --fs-st-badge-false-border: #d4d4d4;
+  --fs-st-badge-false-text: #525252; /* neutral-600 */
+  --fs-st-text-main: #171717;        /* neutral-900 */
+}
+
+html.dark {
+  /* dark – neutral-900/950 style */
+  --fs-st-border: #404040;           /* neutral-700 */
+  --fs-st-border-soft: #262626;      /* neutral-800 */
+  --fs-st-header-bg: #171717;        /* neutral-900 */
+  --fs-st-key-text: #a3a3a3;         /* neutral-400 */
+  --fs-st-muted-text: #a3a3a3;       /* neutral-400 */
+  --fs-st-muted-strong: #737373;     /* neutral-500 */
+  --fs-st-chip-bg: #262626;          /* neutral-800 */
+  --fs-st-chip-text: #f5f5f5;        /* neutral-100 */
+  --fs-st-object-bg: #0a0a0a;        /* neutral-950ish */
+  --fs-st-badge-true-bg: rgba(22, 163, 74, 0.25);
+  --fs-st-badge-true-text: #bbf7d0;
+  --fs-st-badge-false-border: #404040;
+  --fs-st-badge-false-text: #e5e5e5; /* neutral-200 */
+  --fs-st-text-main: #f5f5f5;        /* neutral-100 */
+}
+.fs-snapshot-wrapper {
+  border-radius: 6px;
+  border: 1px solid var(--fs-st-border);
+  overflow: hidden;
+  color: var(--fs-st-text-main);
+}
+
+.fs-snapshot-table {
+  width: 100%;
+  font-size: 12px;
+  border-collapse: collapse;
+}
+
+.fs-snapshot-header-row {
+  border-bottom: 1px solid var(--fs-st-border);
+  background: var(--fs-st-header-bg);
+}
+
+.fs-snapshot-header-cell {
+  padding: 4px 6px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--fs-st-muted-text);
+}
+
+.fs-snapshot-row {
+  border-bottom: 1px solid var(--fs-st-border-soft);
+}
+
+.fs-snapshot-row:last-child {
+  border-bottom: none;
+}
+
+.fs-snapshot-key {
+  padding: 4px 6px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas,
+    "Liberation Mono", "Courier New", monospace;
+  font-size: 10px;
+  color: var(--fs-st-key-text);
+  vertical-align: top;
+}
+
+.fs-snapshot-value {
+  padding: 4px 6px;
+  vertical-align: top;
+}
+
+.fs-snapshot-empty {
+  font-size: 12px;
+  color: var(--fs-st-muted-text);
+  font-style: italic;
+}
+
+.fs-snapshot-muted {
+  color: var(--fs-st-muted-strong);
+  font-style: italic;
+}
+
+.fs-snapshot-text {
+  word-break: break-all;
+}
+
+.fs-snapshot-array {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.fs-snapshot-chip {
+  background: var(--fs-st-chip-bg);
+  color: var(--fs-st-chip-text);
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+}
+
+.fs-snapshot-object {
+  max-height: 128px;
+  overflow: auto;
+  border-radius: 4px;
+  background: var(--fs-st-object-bg);
+  padding: 4px;
+  font-size: 10px;
+}
+
+.fs-snapshot-badge {
+  display: inline-flex;
+  align-items: center;
+  border-radius: 3px;
+  padding: 2px 6px;
+  font-size: 10px;
+}
+
+.fs-snapshot-badge-true {
+  background: var(--fs-st-badge-true-bg);
+  color: var(--fs-st-badge-true-text);
+}
+
+.fs-snapshot-badge-false {
+  background: transparent;
+  color: var(--fs-st-badge-false-text);
+  border: 1px solid var(--fs-st-badge-false-border);
+}
+
+
