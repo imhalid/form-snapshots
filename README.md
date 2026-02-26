@@ -2,7 +2,7 @@
 
 For a more complete, multi-page guide, see the **docs mini‑wiki** under `docs/`:
 
-- [Documentation index](./docs/index.md)
+- [Documentation index](https://github.com/imhalid/form-snapshots/blob/main/docs/index.md)
 
 **form-snapshots** is a small React library that adds **autosave + history snapshots** to your forms using **IndexedDB (Dexie)** under the hood.
 
