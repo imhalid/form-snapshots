@@ -1,4 +1,3 @@
-import type { UseFormReturn } from "react-hook-form"
 import { useFormSnapshots, type FormSnapshotsOptions } from "./hooks/use-form-snapshots"
 
 type WithoutSnapshotOverrides = Omit<
@@ -8,9 +7,18 @@ type WithoutSnapshotOverrides = Omit<
 
 export interface RHFSnapshotsOptions extends WithoutSnapshotOverrides {}
 
+/**
+ * Minimal subset of a React Hook Form instance that this library needs.
+ * Kept structural so consumers are not forced to install `react-hook-form`.
+ */
+export interface RHFFormLike<TFieldValues extends Record<string, unknown>> {
+	getValues: () => TFieldValues
+	reset: (values: TFieldValues) => void
+}
+
 export function useRHFFormSnapshots<TFieldValues extends Record<string, unknown>>(
 	formName: string,
-	form: UseFormReturn<TFieldValues>,
+	form: RHFFormLike<TFieldValues>,
 	options?: RHFSnapshotsOptions,
 ) {
 	return useFormSnapshots(formName, {

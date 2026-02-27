@@ -28,8 +28,7 @@
   },
   "dependencies": {
     "dexie": "^4.3.0",
-    "dexie-react-hooks": "^4.2.0",
-    "react-hook-form": "^7.71.2"
+    "dexie-react-hooks": "^4.2.0"
   },
   "devDependencies": {
     "@types/react": "^18.3.28",
