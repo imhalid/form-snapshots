@@ -28,5 +28,23 @@ db.version(2).stores({
 		"++id, formName, createdAt, updatedAt, submitted, [formName+createdAt]",
 })
 
-export { db }
+db.version(3)
+	.stores({
+		formSessions:
+			"++id, formName, createdAt, updatedAt, submitted, [formName+createdAt], [formName+updatedAt]",
+	})
+	.upgrade((tx) => {
+		return tx
+			.table("formSessions")
+			.toCollection()
+			.modify((session: FormSession) => {
+				if (typeof session.updatedAt !== "number") {
+					session.updatedAt =
+						typeof session.createdAt === "number"
+							? session.createdAt
+							: Date.now()
+				}
+			})
+	})
 
+export { db }

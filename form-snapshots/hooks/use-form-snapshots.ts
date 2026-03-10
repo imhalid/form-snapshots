@@ -1,6 +1,7 @@
 import {
 	useCallback,
 	useEffect,
+	useMemo,
 	useRef,
 	useState,
 	type SyntheticEvent,
@@ -13,6 +14,7 @@ import {
 	snapshotFromDOMForm,
 } from "../dom-snapshot"
 import { useFormSnapshotsConfig } from "../context"
+import { parseSnapshotJson } from "../snapshot-json"
 
 export interface FormSnapshotsOptions {
 	/** How long in ms to retain history entries. Default: 24 h */
@@ -49,6 +51,57 @@ export interface FormSnapshotsOptions {
 	discardOnSubmit?: boolean
 }
 
+type SubmitResultMeta = {
+	statusCode?: number | null
+	errorMessage?: string | null
+}
+
+type SubmitHandler = (
+	e: SyntheticEvent<HTMLFormElement>,
+) => void | SubmitResultMeta | Promise<void | SubmitResultMeta>
+
+function isPlainObject(value: unknown): value is FormSnapshot {
+	if (!value || Object.prototype.toString.call(value) !== "[object Object]") {
+		return false
+	}
+	const proto = Object.getPrototypeOf(value)
+	return proto === Object.prototype || proto === null
+}
+
+function toSubmitResultMeta(value: unknown): SubmitResultMeta | null {
+	if (!value || typeof value !== "object") return null
+
+	const hasStatusCode = "statusCode" in value
+	const hasErrorMessage = "errorMessage" in value
+	if (!hasStatusCode && !hasErrorMessage) return null
+
+	const candidate = value as { statusCode?: unknown; errorMessage?: unknown }
+
+	const statusCode =
+		typeof candidate.statusCode === "number" &&
+		Number.isFinite(candidate.statusCode)
+			? candidate.statusCode
+			: null
+
+	const errorMessage =
+		typeof candidate.errorMessage === "string"
+			? candidate.errorMessage
+			: candidate.errorMessage == null
+				? null
+				: String(candidate.errorMessage)
+
+	return { statusCode, errorMessage }
+}
+
+function isSubmitFailure(result: SubmitResultMeta | null): boolean {
+	if (!result) return false
+	if (typeof result.statusCode === "number" && result.statusCode >= 400) return true
+	if (typeof result.errorMessage === "string" && result.errorMessage.trim() !== "") {
+		return true
+	}
+	return false
+}
+
 function applyExcludeFields(
 	snapshot: FormSnapshot,
 	excludeFields?: string[],
@@ -72,17 +125,12 @@ function applyExcludeFields(
 				continue
 			}
 
-			if (value && typeof value === "object" && !Array.isArray(value)) {
-				result[key] = pruneByPrefix(
-					value as FormSnapshot,
-					paths,
-					path,
-				)
+			if (isPlainObject(value)) {
+				result[key] = pruneByPrefix(value, paths, path)
 				continue
 			}
 
-			// For now, arrays are treated as atomic: you can exclude the whole
-			// array field with its path, but not individual items.
+			// Arrays and non-plain objects are treated as atomic values.
 			result[key] = value
 		}
 
@@ -90,6 +138,11 @@ function applyExcludeFields(
 	}
 
 	return pruneByPrefix(snapshot, excludeFields)
+}
+
+function logSnapshotError(message: string, error: unknown) {
+	// eslint-disable-next-line no-console
+	console.error(message, error)
 }
 
 export function useFormSnapshots(
@@ -103,6 +156,7 @@ export function useFormSnapshots(
 	const sessionIdRef = useRef<number | null>(null)
 	const lastSubmittedSessionIdRef = useRef<number | null>(null)
 	const clientRef = useRef<FormSnapshotsClient | null>(null)
+	const ensureSessionPromiseRef = useRef<Promise<number | null> | null>(null)
 	const [isSubmitted, setIsSubmitted] = useState(false)
 	const storageRef = useRef<FormSnapshotsStorage | null>(null)
 
@@ -120,18 +174,25 @@ export function useFormSnapshots(
 			? discardOnSubmit
 			: globalDiscardOnSubmit ?? false
 
-	const mergedExcludeFields =
-		globalExcludeFields || excludeFields
-			? Array.from(
-					new Set([...(globalExcludeFields ?? []), ...(excludeFields ?? [])]),
-				)
-			: undefined
+	const mergedExcludeFields = useMemo(
+		() =>
+			globalExcludeFields || excludeFields
+				? Array.from(
+						new Set([...(globalExcludeFields ?? []), ...(excludeFields ?? [])]),
+					)
+				: undefined,
+		[globalExcludeFields, excludeFields],
+	)
 
-	// Keep latest callbacks in refs so they never invalidate the init effect
+	// Keep latest callbacks in refs so they never invalidate the init effect.
 	const getValuesRef = useRef(getValues)
 	const applyValuesRef = useRef(applyValues)
-	useEffect(() => { getValuesRef.current = getValues }, [getValues])
-	useEffect(() => { applyValuesRef.current = applyValues }, [applyValues])
+	useEffect(() => {
+		getValuesRef.current = getValues
+	}, [getValues])
+	useEffect(() => {
+		applyValuesRef.current = applyValues
+	}, [applyValues])
 
 	// ── Initialise: create client, prune, resume or open session ───────────────
 	useEffect(() => {
@@ -143,12 +204,13 @@ export function useFormSnapshots(
 			}
 
 			const client = new FormSnapshotsClient({
-				storage: storageRef.current!,
+				storage: storageRef.current,
 				formName,
 				snapshotsLimit: effectiveSnapshotsLimit,
 			})
 
 			clientRef.current = client
+			ensureSessionPromiseRef.current = null
 
 			const session = await client.initSession()
 			if (cancelled) return
@@ -157,10 +219,10 @@ export function useFormSnapshots(
 
 			// Restore saved values (after mount) via applyValues callback when
 			// provided, or fall back to DOM-based restoration for flat forms.
-			if (session.data && session.data !== "{}") {
+			const snapshot = parseSnapshotJson(session.data)
+			if (snapshot && Object.keys(snapshot).length > 0) {
 				requestAnimationFrame(() => {
 					if (cancelled) return
-					const snapshot = JSON.parse(session.data) as FormSnapshot
 					if (applyValuesRef.current) {
 						applyValuesRef.current(snapshot)
 					} else if (formRef.current) {
@@ -170,24 +232,54 @@ export function useFormSnapshots(
 			}
 		}
 
-		init()
+		void init()
 
 		return () => {
 			cancelled = true
 		}
 	}, [formName, effectiveSnapshotsLimit])
 
-	// ── Snapshot current form values into the active session ──────────────────
-	const handleBlur = useCallback(() => {
-		const sessionId = sessionIdRef.current
+	const ensureActiveSession = useCallback(async (): Promise<number | null> => {
+		if (sessionIdRef.current !== null) {
+			return sessionIdRef.current
+		}
+		if (ensureSessionPromiseRef.current) {
+			return ensureSessionPromiseRef.current
+		}
+
+		const client = clientRef.current
+		if (!client) return null
+
+		const pending = client
+			.initSession()
+			.then((session) => {
+				sessionIdRef.current = session.id
+				setIsSubmitted(false)
+				return session.id
+			})
+			.catch((error) => {
+				logSnapshotError("Failed to initialize form snapshot session", error)
+				return null
+			})
+			.finally(() => {
+				ensureSessionPromiseRef.current = null
+			})
+
+		ensureSessionPromiseRef.current = pending
+		return pending
+	}, [])
+
+	const persistCurrentSnapshot = useCallback(async () => {
+		const sessionId = await ensureActiveSession()
 		if (sessionId === null) return
+
+		const client = clientRef.current
+		if (!client) return
 
 		let snapshot: FormSnapshot
 
 		if (getValuesRef.current) {
 			// Controlled / structured form — caller owns the state.
-			// Supports arbitrarily nested values: HL7 Address, HumanName,
-			// ContactPoint[], CodeableConcept, etc.
 			snapshot = getValuesRef.current()
 		} else {
 			// Fallback: enumerate flat DOM form elements (strings / booleans only).
@@ -198,55 +290,125 @@ export function useFormSnapshots(
 
 		snapshot = applyExcludeFields(snapshot, mergedExcludeFields)
 
-		if (!clientRef.current) return
+		try {
+			await client.saveSnapshot(sessionId, snapshot)
+		} catch (error) {
+			logSnapshotError("Failed to save form snapshot", error)
+		}
+	}, [ensureActiveSession, mergedExcludeFields])
 
-		clientRef.current.saveSnapshot(sessionId, snapshot)
-	}, []) // getValues is read via ref — no dep needed
+	// ── Snapshot current form values into the active session ──────────────────
+	const handleBlur = useCallback(() => {
+		void persistCurrentSnapshot()
+	}, [persistCurrentSnapshot])
 
 	// ── Clear current form values after submit when requested ─────────────────
 	const clearFormState = useCallback(() => {
 		if (applyValuesRef.current) {
-			// For controlled / structured forms, an empty snapshot is passed
-			// back to the caller so they can reset their own state.
 			applyValuesRef.current({} as FormSnapshot)
 		} else if (formRef.current) {
-			// For plain DOM forms, reset back to the initial values.
 			formRef.current.reset()
 		}
 	}, [])
 
+	const setSessionResult = useCallback(async (result: SubmitResultMeta) => {
+		const client = clientRef.current
+		const sessionId = sessionIdRef.current
+		if (!client || sessionId == null) return
+
+		try {
+			await client.setSubmissionResult({
+				sessionId,
+				statusCode: result.statusCode,
+				errorMessage: result.errorMessage,
+			})
+		} catch (error) {
+			logSnapshotError("Failed to save submission result", error)
+		}
+	}, [])
+
+	const closeActiveSession = useCallback(async (): Promise<boolean> => {
+		const sessionId = sessionIdRef.current
+		const client = clientRef.current
+		if (sessionId === null || !client) return false
+
+		try {
+			if (effectiveDiscardOnSubmit) {
+				await client.deleteSession(sessionId)
+				lastSubmittedSessionIdRef.current = null
+			} else {
+				await client.markSubmitted(sessionId)
+				lastSubmittedSessionIdRef.current = sessionId
+			}
+			sessionIdRef.current = null
+			return true
+		} catch (error) {
+			lastSubmittedSessionIdRef.current = null
+			logSnapshotError("Failed to close form snapshot session", error)
+			return false
+		}
+	}, [effectiveDiscardOnSubmit])
+
+	const finalizeSuccessfulSubmit = useCallback(async () => {
+		const closed = await closeActiveSession()
+		if (!closed) {
+			setIsSubmitted(false)
+			return
+		}
+
+		if (effectiveDiscardOnSubmit) {
+			clearFormState()
+		}
+		setIsSubmitted(true)
+	}, [closeActiveSession, clearFormState, effectiveDiscardOnSubmit])
+
+	const executeSubmit = useCallback(
+		async (
+			e: SyntheticEvent<HTMLFormElement>,
+			userSubmit?: SubmitHandler,
+			keepErrorsSilent = false,
+		) => {
+			e.preventDefault()
+			await persistCurrentSnapshot()
+
+			if (!userSubmit) {
+				await finalizeSuccessfulSubmit()
+				return
+			}
+
+			try {
+				const rawResult = await userSubmit(e)
+				const submitResult = toSubmitResultMeta(rawResult)
+				if (submitResult) {
+					await setSessionResult(submitResult)
+				}
+
+				if (isSubmitFailure(submitResult)) {
+					setIsSubmitted(false)
+					return
+				}
+
+				await finalizeSuccessfulSubmit()
+			} catch (error) {
+				setIsSubmitted(false)
+				if (keepErrorsSilent) {
+					// eslint-disable-next-line no-console
+					console.error("wrapSubmitAsync userSubmit error:", error)
+					return
+				}
+				throw error
+			}
+		},
+		[persistCurrentSnapshot, finalizeSuccessfulSubmit, setSessionResult],
+	)
+
 	// ── Wrap the form's onSubmit to close the session ─────────────────────────
 	const wrapSubmit = useCallback(
-		(
-			userSubmit?: (e: SyntheticEvent<HTMLFormElement>) => void,
-		) =>
-			(e: SyntheticEvent<HTMLFormElement>) => {
-				e.preventDefault()
-				handleBlur() // capture the final state before closing
-
-				const sessionId = sessionIdRef.current
-				const client = clientRef.current
-				if (sessionId !== null && client) {
-					if (effectiveDiscardOnSubmit) {
-						// Discard the entire session so submitted data is not kept.
-						client.deleteSession(sessionId)
-						lastSubmittedSessionIdRef.current = null
-					} else {
-						client.markSubmitted(sessionId)
-						lastSubmittedSessionIdRef.current = sessionId
-					}
-					// Closed session should no longer receive snapshots
-					sessionIdRef.current = null
-				}
-
-				if (effectiveDiscardOnSubmit) {
-					clearFormState()
-				}
-
-				setIsSubmitted(true)
-				userSubmit?.(e)
+		(userSubmit?: SubmitHandler) =>
+			async (e: SyntheticEvent<HTMLFormElement>) => {
+				await executeSubmit(e, userSubmit, false)
 			},
-		[handleBlur, clearFormState, effectiveDiscardOnSubmit],
+		[executeSubmit],
 	)
 
 	const markSubmitResult = useCallback(
@@ -255,99 +417,52 @@ export function useFormSnapshots(
 			errorMessage?: string | null
 		}) => {
 			const client = clientRef.current
-			const sessionId = lastSubmittedSessionIdRef.current
+			const sessionId =
+				sessionIdRef.current ?? lastSubmittedSessionIdRef.current
 			if (!client || sessionId == null) return
 
-			await client.setSubmissionResult({
-				sessionId,
-				statusCode: params.statusCode,
-				errorMessage: params.errorMessage,
-			})
+			try {
+				await client.setSubmissionResult({
+					sessionId,
+					statusCode: params.statusCode,
+					errorMessage: params.errorMessage,
+				})
+			} catch (error) {
+				logSnapshotError("Failed to mark submit result", error)
+			}
 		},
 		[],
 	)
 
 	const wrapSubmitAsync = useCallback(
-		(
-				userSubmit?: (
-					e: SyntheticEvent<HTMLFormElement>,
-				) => Promise<
-					| void
-					| {
-							statusCode?: number | null
-							errorMessage?: string | null
-					  }
-				>,
-			) =>
+		(userSubmit?: SubmitHandler) =>
 			async (e: SyntheticEvent<HTMLFormElement>) => {
-				e.preventDefault()
-				handleBlur()
-
-				const sessionId = sessionIdRef.current
-				const client = clientRef.current
-				if (sessionId !== null && client) {
-					if (effectiveDiscardOnSubmit) {
-						await client.deleteSession(sessionId)
-						lastSubmittedSessionIdRef.current = null
-					} else {
-						await client.markSubmitted(sessionId)
-						lastSubmittedSessionIdRef.current = sessionId
-					}
-					sessionIdRef.current = null
-				}
-
-				if (effectiveDiscardOnSubmit) {
-					clearFormState()
-				}
-
-				setIsSubmitted(true)
-
-				if (!userSubmit) return
-
-				try {
-					const result = await userSubmit(e)
-					if (result && typeof result === "object") {
-						await markSubmitResult({
-							statusCode: "statusCode" in result ? result.statusCode : null,
-							errorMessage:
-								"errorMessage" in result ? result.errorMessage : null,
-						})
-					}
-				} catch (error) {
-			// In case of error we leave handling to the caller;
-			// logging here is enough. Callers can still invoke
-			// markSubmitResult manually if they want.
-					// eslint-disable-next-line no-console
-					console.error("wrapSubmitAsync userSubmit error:", error)
-				}
+				await executeSubmit(e, userSubmit, true)
 			},
-		[handleBlur, markSubmitResult, clearFormState, effectiveDiscardOnSubmit],
+		[executeSubmit],
 	)
 
-	// ── Restore the latest saved snapshot into the DOM form ───────────────────
+	// ── Restore the latest saved snapshot into the form ───────────────────────
 	const restoreLatest = useCallback(async () => {
-		if (!clientRef.current) return
+		const client = clientRef.current
+		if (!client) return
 
-		const snapshot = await clientRef.current.getLatestSnapshot()
+		const snapshot = await client.getLatestSnapshot()
 		if (!snapshot) return
 
 		if (applyValuesRef.current) {
-			// Structured form — route the full nested snapshot back to state.
 			applyValuesRef.current(snapshot)
-		} else {
-			if (!formRef.current) return
+		} else if (formRef.current) {
 			restoreSnapshotToForm(formRef.current, snapshot)
 		}
 
 		// Open a new session pre-seeded with the restored data so further edits
-		// are tracked against the fresh session
-		const newSession = await clientRef.current.openNewSessionFromSnapshot(
-			snapshot,
-		)
+		// are tracked against the fresh session.
+		const newSession = await client.openNewSessionFromSnapshot(snapshot)
 		sessionIdRef.current = newSession.id
 
 		setIsSubmitted(false)
-	}, []) // applyValues is read via ref — no dep needed
+	}, [])
 
 	return {
 		formRef,

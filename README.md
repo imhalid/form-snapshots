@@ -91,7 +91,7 @@ export function ContactForm() {
 
 - On blur, the hook reads values from the DOM and saves them to IndexedDB.
 - On mount, it restores the latest snapshot (if any) back into the form.
-- On submit, it closes the session and marks it as `submitted` so new edits start a fresh session.
+- On submit, it captures the final state and closes the session only after a successful handler result.
 
 ### Options
 
@@ -145,7 +145,8 @@ Per-form options passed to `useFormSnapshots` are merged with this global config
 - Inline table view of the snapshot data for each session.
 - Ability to delete a single session or clear all sessions from local history (dev-only).
 
-It automatically hides itself in production (`import.meta.env.PROD`).
+It automatically hides itself in production (NODE_ENV + hostname detection).  
+If you need explicit control (e.g. Vite), pass `isProduction={import.meta.env.PROD}`.
 
 ```tsx
 import { FormSnapshotsDevtools } from "form-snapshots"
@@ -223,4 +224,3 @@ The build outputs ESM, CJS, and `.d.ts` type declarations under `dist/`.
 ## License
 
 ISC
-

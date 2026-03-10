@@ -1,5 +1,6 @@
 import { useMemo } from "react"
 import { ensureFormSnapshotsStyles } from "./styles"
+import { parseSnapshotJson } from "./snapshot-json"
 
 type Primitive = string | number | boolean | null | undefined
 
@@ -35,23 +36,25 @@ type ParsedSnapshot = {
 }
 
 const snapshotCache = new Map<string, ParsedSnapshot>()
+const SNAPSHOT_CACHE_LIMIT = 200
 
 function parseSnapshot(data: string): ParsedSnapshot {
 	const cached = snapshotCache.get(data)
 	if (cached) return cached
 
-	let snapshot: Record<string, unknown> = {}
-	try {
-		snapshot = JSON.parse(data) as Record<string, unknown>
-	} catch {
-		snapshot = {}
-	}
+	const snapshot = parseSnapshotJson(data) ?? {}
 
 	const parsed = {
 		snapshot,
 		fieldCount: Object.keys(snapshot).length,
 	}
 
+	if (snapshotCache.size >= SNAPSHOT_CACHE_LIMIT) {
+		const oldestKey = snapshotCache.keys().next().value
+		if (oldestKey) {
+			snapshotCache.delete(oldestKey)
+		}
+	}
 	snapshotCache.set(data, parsed)
 	return parsed
 }
@@ -170,4 +173,3 @@ function SnapshotValueCell({ value }: Readonly<{ value: unknown }>) {
 		</pre>
 	)
 }
-

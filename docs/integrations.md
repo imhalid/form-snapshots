@@ -242,6 +242,7 @@ The devtools will then show:
 
 - `status 200` with no error, or
 - `status 400` + `"Validation failed"`, etc.
+- Failed results (status >= 400 or non-empty `errorMessage`) keep the session open so users can continue editing.
 
 which makes it easier to debug real‑world flows.
 
@@ -252,4 +253,3 @@ which makes it easier to debug real‑world flows.
 - For DOM forms: [2. Basic Usage with DOM Forms](./basic-usage.md)
 - For global policies and history: [3. Configuration & Session Behaviour](./configuration.md)
 - For visual inspection during development: [4. Devtools & Snapshot Inspection](./devtools.md)
-

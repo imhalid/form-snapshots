@@ -18,7 +18,7 @@ function mapToBase(session: FormSession): FormSessionBase {
 	}
 }
 
-	export class DexieFormSnapshotsStorage implements FormSnapshotsStorage {
+export class DexieFormSnapshotsStorage implements FormSnapshotsStorage {
 	async findActiveSession(formName: string): Promise<FormSessionBase | null> {
 		const existing = await db.formSessions
 			.where("formName")
@@ -84,11 +84,10 @@ function mapToBase(session: FormSession): FormSessionBase {
 	}
 
 	async pruneOlderThan(cutoffMs: number): Promise<void> {
-		await db.formSessions.where("createdAt").below(cutoffMs).delete()
+		await db.formSessions.where("updatedAt").below(cutoffMs).delete()
 	}
 
 	async deleteSession(id: number): Promise<void> {
 		await db.formSessions.delete(id)
 	}
 }
-

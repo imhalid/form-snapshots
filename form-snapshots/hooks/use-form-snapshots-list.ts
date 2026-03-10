@@ -54,12 +54,13 @@ export function useFormSnapshotsList(
 
 	const items = useLiveQuery<FormHistoryListItem[] | undefined>(async () => {
 		const now = Date.now()
-		const cutoff = maxAgeMs ? now - maxAgeMs : undefined
-
-		let query = db.formSessions.where("formName").equals(formName)
+		const cutoff = typeof maxAgeMs === "number" ? now - maxAgeMs : undefined
 
 		// Other filters are not supported directly by Dexie, so we refine via JS filter.
-		let sessions: FormSession[] = await query.toArray()
+		let sessions: FormSession[] = await db.formSessions
+			.where("formName")
+			.equals(formName)
+			.toArray()
 
 		if (onlySubmitted) {
 			sessions = sessions.filter((s) => s.submitted)
@@ -73,7 +74,7 @@ export function useFormSnapshotsList(
 		}
 
 		if (cutoff != null) {
-			sessions = sessions.filter((s) => s.createdAt >= cutoff)
+			sessions = sessions.filter((s) => s.updatedAt >= cutoff)
 		}
 
 		sessions.sort((a, b) => b.updatedAt - a.updatedAt)
@@ -98,4 +99,3 @@ export function useFormSnapshotsList(
 
 	return { items: items ?? [], isLoading }
 }
-

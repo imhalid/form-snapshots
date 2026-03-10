@@ -24,7 +24,9 @@ export function RootLayout() {
 Notes:
 
 - The devtools component automatically **injects its own styles**.
-- It **does not render in production** – it checks `import.meta.env.PROD` and returns `null` when `true`.
+- It **does not render in production** by default (NODE_ENV + hostname detection).
+- You can override detection explicitly:
+  - `<FormSnapshotsDevtools isProduction={import.meta.env.PROD} />`
 
 ---
 
@@ -116,4 +118,3 @@ These actions only affect **local IndexedDB data** in the current browser and do
 
 For those programmatic APIs, also see  
 [3. Configuration & Session Behaviour](./configuration.md).
-

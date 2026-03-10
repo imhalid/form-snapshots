@@ -25,12 +25,49 @@ function formatAge(ms: number) {
 	return `${seconds}s`
 }
 
-export function FormSnapshotsDevtools() {
+type GlobalWithNodeEnv = typeof globalThis & {
+	process?: { env?: { NODE_ENV?: string } }
+}
+
+function isLocalHostname(hostname: string): boolean {
+	return (
+		hostname === "localhost" ||
+		hostname === "127.0.0.1" ||
+		hostname === "::1" ||
+		hostname.endsWith(".local")
+	)
+}
+
+function inferProductionFromLocation() {
+	if (typeof window === "undefined") return false
+	return !isLocalHostname(window.location.hostname)
+}
+
+function isProductionRuntime(override?: boolean) {
+	if (typeof override === "boolean") return override
+
+	const nodeEnv = (globalThis as GlobalWithNodeEnv).process?.env?.NODE_ENV
+	if (typeof nodeEnv === "string" && nodeEnv.length > 0) {
+		return nodeEnv === "production"
+	}
+
+	return inferProductionFromLocation()
+}
+
+export interface FormSnapshotsDevtoolsProps {
+	/**
+	 * Optional runtime override for environment detection.
+	 * Use `import.meta.env.PROD` in Vite-based apps if needed.
+	 */
+	isProduction?: boolean
+}
+
+export function FormSnapshotsDevtools({
+	isProduction,
+}: Readonly<FormSnapshotsDevtoolsProps> = {}) {
 	ensureFormSnapshotsStyles()
 
-	const isProd =
-		typeof import.meta !== "undefined" &&
-		(import.meta as any).env?.PROD
+	const isProd = isProductionRuntime(isProduction)
 
 	if (isProd) {
 		return null
@@ -354,4 +391,3 @@ function ChevronDownIcon(props: IconProps) {
 		</svg>
 	)
 }
-

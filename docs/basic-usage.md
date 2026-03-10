@@ -52,8 +52,8 @@ export function ContactForm() {
 - When the component **mounts**, the latest snapshot (if any) is applied back into the form.
 - On **submit**, `wrapSubmit`:
   - captures the final state,
-  - marks the session as submitted (closed),
-  - and then runs your original submit handler.
+  - runs your original submit handler,
+  - and closes the session only when submit succeeds.
 
 ---
 
@@ -115,4 +115,3 @@ Use one of the adapters when:
 
 For those scenarios, continue with  
 [5. Integrations (React Hook Form, Zod, object state)](./integrations.md).
-

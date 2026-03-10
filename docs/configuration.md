@@ -51,7 +51,7 @@ useFormSnapshots("contact-form", {
 })
 ```
 
-Internally, old sessions are pruned based on their `createdAt` timestamp.
+Internally, old sessions are pruned based on their `updatedAt` timestamp.
 
 Use this when:
 
@@ -164,4 +164,3 @@ Use this when:
 
 For inspecting the full snapshot content visually, also see  
 [4. Devtools & Snapshot Inspection](./devtools.md).
-

@@ -3,6 +3,7 @@ import type {
 	FormSessionBase,
 	FormSnapshot,
 } from "./types"
+import { parseSnapshotJson } from "./snapshot-json"
 
 export class FormSnapshotsClient {
 	private readonly storage: FormSnapshotsStorage
@@ -70,7 +71,7 @@ export class FormSnapshotsClient {
 	async getLatestSnapshot(): Promise<FormSnapshot | null> {
 		const latest = await this.storage.getLatestSession(this.formName)
 		if (!latest) return null
-		return JSON.parse(latest.data) as FormSnapshot
+		return parseSnapshotJson(latest.data)
 	}
 
 	async openNewSessionFromSnapshot(
@@ -79,4 +80,3 @@ export class FormSnapshotsClient {
 		return this.storage.createSession(this.formName, snapshot)
 	}
 }
-

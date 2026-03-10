@@ -13,7 +13,7 @@ export {
 	type FormSnapshotsProviderProps,
 } from "./context"
 
-export { FormSnapshotsDevtools } from "./devtools"
+export { FormSnapshotsDevtools, type FormSnapshotsDevtoolsProps } from "./devtools"
 
 export {
 	FormSnapshotTable,
